@@ -216,3 +216,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-specific (RAG MVP)
+storage/files/
+storage/chroma/
+storage/app.db
+storage/*.db
+storage/*.sqlite
+storage/*.sqlite3
+
+# Local uv artifacts
+.uv-cache/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
