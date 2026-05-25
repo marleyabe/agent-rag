@@ -42,3 +42,38 @@ def test_filter_by_file_id() -> None:
     query = emb.embed("multa")
     result = store.search(query_embedding=query, top_k=5, filters={"file_id": "f2"})
     assert [chunk.chunk_id for chunk in result] == ["c2"]
+
+
+def test_add_uses_embed_many_for_indexing() -> None:
+    class BatchOnlyEmbedding(FakeEmbeddingModel):
+        def __init__(self) -> None:
+            self.embed_calls = 0
+            self.embed_many_calls = 0
+
+        def embed(self, text: str) -> list[float]:
+            self.embed_calls += 1
+            return super().embed(text)
+
+        def embed_many(self, texts: list[str]) -> list[list[float]]:
+            self.embed_many_calls += 1
+            return [FakeEmbeddingModel.embed(self, text) for text in texts]
+
+    emb = BatchOnlyEmbedding()
+    store = FakeVectorStore(embedding_model=emb)
+    store.add([_chunk("c1", "multa", "f1"), _chunk("c2", "contrato", "f1")])
+    assert emb.embed_many_calls == 1
+    assert emb.embed_calls == 0
+
+
+def test_fetch_filters_and_limits_chunks() -> None:
+    emb = FakeEmbeddingModel()
+    store = FakeVectorStore(embedding_model=emb)
+    store.add(
+        [
+            _chunk("c1", "multa", "f1"),
+            _chunk("c2", "contrato", "f2"),
+            _chunk("c3", "prazo", "f1"),
+        ]
+    )
+
+    assert [chunk.chunk_id for chunk in store.fetch(filters={"file_id": "f1"}, limit=1)] == ["c1"]

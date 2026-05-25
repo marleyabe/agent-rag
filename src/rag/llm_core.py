@@ -6,31 +6,67 @@ from models import Chunk
 from rag.fake_llm import LLM, FakeLLM
 
 
-class GeminiLLM(LLM):
+class OpenAILLM(LLM):
     def __init__(self) -> None:
         self._fallback = FakeLLM()
         self._client = None
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
         if api_key:
-            from google import genai
+            from openai import OpenAI
 
-            self._client = genai.Client(api_key=api_key)
-        self._model = os.getenv("GEMINI_MODEL", "models/gemini-3-flash-preview")
+            self._client = OpenAI(api_key=api_key)
+        self._model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
     def generate(self, question: str, chunks: list[Chunk]) -> str:
         if not chunks:
             return "Nao encontrei essa informacao nos documentos enviados."
         if self._client is None:
             return self._fallback.generate(question, chunks)
-        context = "\n\n".join([chunk.text for chunk in chunks[:5]])
-        prompt = (
-            "Responda em portugues com base apenas no contexto abaixo. "
-            "Se faltar informacao, diga que nao encontrou nos documentos.\n\n"
+        context = "\n\n".join(
+            [f"[C{idx + 1}] {chunk.text}" for idx, chunk in enumerate(chunks[:8])]
+        )
+        extraction_prompt = (
+            "Extraia fatos objetivos SOMENTE do contexto. "
+            "Cada linha deve terminar com pelo menos uma citacao [C#]. "
+            "Se nao houver fatos suficientes, retorne exatamente: SEM_EVIDENCIA.\n\n"
             f"Pergunta: {question}\n\nContexto:\n{context}"
         )
-        response = self._client.models.generate_content(
-            model=self._model,
-            contents=prompt,
-        )
-        return (response.text or "").strip()
+        try:
+            extraction = self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Voce extrai evidencias literais de trechos recuperados para RAG."
+                        ),
+                    },
+                    {"role": "user", "content": extraction_prompt},
+                ],
+            )
+        except Exception:
+            return self._fallback.generate(question, chunks)
+        facts = (extraction.choices[0].message.content or "").strip()
+        if not facts or "SEM_EVIDENCIA" in facts:
+            return self._fallback.generate(question, chunks)
 
+        answer_prompt = (
+            "Com base apenas nos fatos extraidos abaixo, responda em portugues de forma objetiva. "
+            "Toda afirmacao deve conter citacao [C#]. Se os fatos nao bastarem, responda "
+            "'Nao encontrei essa informacao nos documentos enviados.'\n\n"
+            f"Pergunta: {question}\n\nFatos extraidos:\n{facts}"
+        )
+        try:
+            answer = self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Voce gera respostas RAG estritamente fundamentadas em evidencias.",
+                    },
+                    {"role": "user", "content": answer_prompt},
+                ],
+            )
+        except Exception:
+            return self._fallback.generate(question, chunks)
+        return (answer.choices[0].message.content or "").strip()

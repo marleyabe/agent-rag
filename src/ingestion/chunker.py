@@ -4,9 +4,10 @@ from models import Chunk, DocumentSection
 
 
 class Chunker:
-    def __init__(self, max_chars: int = 800, max_lines: int = 20) -> None:
+    def __init__(self, max_chars: int = 800, max_lines: int = 20, overlap_lines: int = 3) -> None:
         self.max_chars = max_chars
         self.max_lines = max_lines
+        self.overlap_lines = overlap_lines
 
     def split(self, sections: list[DocumentSection]) -> list[Chunk]:
         chunks: list[Chunk] = []
@@ -20,7 +21,7 @@ class Chunker:
             start_line = 1
             current_chars = 0
 
-            def flush(end_line: int) -> None:
+            def flush(end_line: int, keep_overlap: bool = True) -> None:
                 nonlocal chunk_index, current_lines, current_chars, start_line
                 if not current_lines:
                     return
@@ -40,9 +41,17 @@ class Chunker:
                 }
                 chunks.append(Chunk(chunk_id=chunk_id, text=text, metadata=metadata))
                 chunk_index += 1
-                current_lines = []
-                current_chars = 0
-                start_line = end_line + 1
+                if keep_overlap and self.overlap_lines > 0:
+                    overlap = current_lines[-self.overlap_lines :]
+                    current_lines = list(overlap)
+                    current_chars = sum(len(line) for line in current_lines) + max(
+                        0, len(current_lines) - 1
+                    )
+                    start_line = max(1, end_line - len(current_lines) + 1)
+                else:
+                    current_lines = []
+                    current_chars = 0
+                    start_line = end_line + 1
 
             for idx, line in enumerate(lines, start=1):
                 projected = current_chars + len(line) + (1 if current_lines else 0)
@@ -50,7 +59,7 @@ class Chunker:
                     flush(idx - 1)
                 current_lines.append(line)
                 current_chars += len(line) + (1 if len(current_lines) > 1 else 0)
-            flush(len(lines))
+            flush(len(lines), keep_overlap=False)
 
         return chunks
 

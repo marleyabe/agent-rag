@@ -18,7 +18,7 @@ class ChromaVectorStore:
         ids = [chunk.chunk_id for chunk in chunks]
         docs = [chunk.text for chunk in chunks]
         metas = [chunk.metadata for chunk in chunks]
-        embeds = [self.embedding_model.embed(chunk.text) for chunk in chunks]
+        embeds = self.embedding_model.embed_many(docs)
         self.collection.upsert(ids=ids, documents=docs, metadatas=metas, embeddings=embeds)
 
     def search(
@@ -30,10 +30,30 @@ class ChromaVectorStore:
             n_results=top_k,
             where=where,
         )
-        ids = result.get("ids", [[]])[ -1]
+        ids = result.get("ids", [[]])[-1]
         docs = result.get("documents", [[]])[0]
         metas = result.get("metadatas", [[]])[0]
+        distances = result.get("distances", [[]])[0]
+        chunks: list[Chunk] = []
+        for idx, (chunk_id, text, meta) in enumerate(zip(ids, docs, metas)):
+            metadata = dict(meta or {})
+            if idx < len(distances):
+                distance = float(distances[idx])
+                metadata["retrieval_distance"] = distance
+                metadata["retrieval_score"] = 1.0 / (1.0 + distance)
+            chunks.append(Chunk(chunk_id=chunk_id, text=text, metadata=metadata))
+        return chunks
+
+    def fetch(self, filters: dict | None = None, limit: int | None = None) -> list[Chunk]:
+        result = self.collection.get(
+            where=filters or None,
+            limit=limit,
+            include=["documents", "metadatas"],
+        )
+        ids = result.get("ids", [])
+        docs = result.get("documents", [])
+        metas = result.get("metadatas", [])
         return [
-            Chunk(chunk_id=chunk_id, text=text, metadata=meta or {})
+            Chunk(chunk_id=chunk_id, text=text, metadata=dict(meta or {}))
             for chunk_id, text, meta in zip(ids, docs, metas)
         ]

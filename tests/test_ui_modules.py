@@ -47,10 +47,26 @@ def test_document_viewer_payload_and_pdf_name(tmp_path) -> None:
 
 def test_upload_ingest_delegates_to_service() -> None:
     class FakeService:
-        def ingest_uploaded_file(self, file_name: str, content: bytes) -> DocumentRecord:
+        def ingest_uploaded_file(self, file_name: str, content: bytes, progress_callback=None) -> DocumentRecord:
             assert file_name == "x.pdf"
             assert content == b"123"
+            if progress_callback:
+                progress_callback(0.5, "meio")
             return DocumentRecord("f1", "x.pdf", "pdf", "/tmp/x.pdf")
 
     out = ingest_upload(FakeService(), "x.pdf", b"123")
     assert out.file_id == "f1"
+
+
+def test_upload_ingest_delegates_progress_callback() -> None:
+    events = []
+
+    class FakeService:
+        def ingest_uploaded_file(self, file_name: str, content: bytes, progress_callback=None) -> DocumentRecord:
+            if progress_callback:
+                progress_callback(0.1, "inicio")
+                progress_callback(1.0, "fim")
+            return DocumentRecord("f1", file_name, "pdf", "/tmp/x.pdf")
+
+    ingest_upload(FakeService(), "x.pdf", b"123", progress_callback=lambda v, m: events.append((v, m)))
+    assert events == [(0.1, "inicio"), (1.0, "fim")]

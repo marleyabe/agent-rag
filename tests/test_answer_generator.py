@@ -38,3 +38,33 @@ def test_generate_answer_without_chunks_returns_no_information() -> None:
     answer = generator.generate("qual a multa?", [])
     assert "Nao encontrei" in answer.answer
     assert answer.citations == []
+
+
+def test_generate_answer_with_no_evidence_response_returns_no_citations() -> None:
+    class NoEvidenceLLM(FakeLLM):
+        def generate(self, question: str, chunks: list[Chunk]) -> str:
+            return "Nao encontrei essa informacao nos documentos enviados."
+
+    generator = AnswerGenerator(llm=NoEvidenceLLM(), citation_formatter=CitationFormatter())
+    answer = generator.generate(
+        "qual a multa?",
+        [
+            Chunk(
+                chunk_id="doc1_p1_c0",
+                text="A multa por atraso e de 2%",
+                metadata={
+                    "file_id": "doc1",
+                    "file_name": "contrato.pdf",
+                    "file_type": "pdf",
+                    "page_number": 1,
+                    "paragraph_number": None,
+                    "start_line": 2,
+                    "end_line": 4,
+                    "chunk_id": "doc1_p1_c0",
+                },
+            )
+        ],
+    )
+
+    assert "Nao encontrei" in answer.answer
+    assert answer.citations == []

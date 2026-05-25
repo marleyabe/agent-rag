@@ -17,6 +17,8 @@ class AnswerGenerator:
                 citations=[],
             )
         answer_text = self.llm.generate(question, chunks)
+        if "Nao encontrei essa informacao" in answer_text:
+            return Answer(answer=answer_text, citations=[])
         citations = [self.citation_formatter.format(chunk) for chunk in chunks]
         unique: list = []
         seen = set()

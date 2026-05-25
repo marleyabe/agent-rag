@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+from typing import Callable
 
 from citations.formatter import CitationFormatter
 from config import AppConfig
@@ -11,8 +12,8 @@ from ingestion.chunker import Chunker
 from ingestion.loaders import DocumentLoader
 from models import Answer, DocumentRecord
 from rag.answer_generator import AnswerGenerator
-from rag.embedding_core import GeminiEmbeddingModel
-from rag.llm_core import GeminiLLM
+from rag.embedding_core import OpenAIEmbeddingModel
+from rag.llm_core import OpenAILLM
 from rag.pipeline import RagPipeline
 from rag.retriever import Retriever
 from storage.db import AppDatabase
@@ -21,10 +22,10 @@ from vectorstore.chroma_store import ChromaVectorStore
 
 
 def _collection_name_from_env() -> str:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         return "chunks_fake_embedding_v1"
-    model = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
+    model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     sanitized = model.replace("/", "_").replace("-", "_").replace(".", "_")
     return f"chunks_{sanitized}"
 
@@ -35,7 +36,7 @@ class NotebookService:
         self.config = config
         self.db = AppDatabase(config.db_path)
         self.files = FileStorage(config.files_dir)
-        self.embedding = GeminiEmbeddingModel()
+        self.embedding = OpenAIEmbeddingModel()
         self.vector_store = ChromaVectorStore(
             str(config.chroma_dir),
             self.embedding,
@@ -47,19 +48,34 @@ class NotebookService:
             vector_store=self.vector_store,
             retriever=Retriever(embedding_model=self.embedding, vector_store=self.vector_store),
             answer_generator=AnswerGenerator(
-                llm=GeminiLLM(),
+                llm=OpenAILLM(),
                 citation_formatter=CitationFormatter(),
             ),
         )
 
-    def ingest_uploaded_file(self, file_name: str, content: bytes) -> DocumentRecord:
+    def ingest_uploaded_file(
+        self,
+        file_name: str,
+        content: bytes,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> DocumentRecord:
+        if progress_callback:
+            progress_callback(0.05, "Preparando upload...")
         with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file_name).suffix) as tmp:
             tmp.write(content)
             temp_path = Path(tmp.name)
+        if progress_callback:
+            progress_callback(0.2, "Salvando arquivo...")
         saved_path = self.files.save_upload(temp_path, file_name)
+        if progress_callback:
+            progress_callback(0.45, "Extraindo e segmentando texto...")
         record = self.pipeline.ingest(saved_path)
+        if progress_callback:
+            progress_callback(0.9, "Persistindo metadados...")
         self.db.upsert_document(record)
         temp_path.unlink(missing_ok=True)
+        if progress_callback:
+            progress_callback(1.0, "Concluido.")
         return record
 
     def ask(self, question: str, file_id: str | None = None) -> Answer:

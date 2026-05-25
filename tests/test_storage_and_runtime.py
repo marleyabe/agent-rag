@@ -97,9 +97,10 @@ def test_notebook_service_ingest_and_ask_with_monkeypatched_deps(
 
 
 def test_runtime_collection_name_from_env(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     assert _collection_name_from_env() == "chunks_fake_embedding_v1"
 
-    monkeypatch.setenv("GEMINI_API_KEY", "x")
-    monkeypatch.setenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
-    assert _collection_name_from_env() == "chunks_models_gemini_embedding_001"
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    assert _collection_name_from_env() == "chunks_text_embedding_3_small"

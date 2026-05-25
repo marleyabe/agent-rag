@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 import sys
 
@@ -10,13 +11,17 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from config import AppConfig
-from rag.runtime import NotebookService
-from ui.chat import ask_question, resolve_filter_file_id
-from ui.citations import citation_title, citation_viewer_link
-from ui.document_viewer import build_pdf_open_url, get_viewer_payload
-from ui.upload import ingest_upload
-from ui.viewer import parse_citation_url
+from config import AppConfig  # noqa: E402
+from rag.runtime import NotebookService  # noqa: E402
+from ui.chat import ask_question, resolve_filter_file_id  # noqa: E402
+from ui.citations import citation_title, citation_viewer_link  # noqa: E402
+from ui.document_viewer import build_pdf_open_url, get_viewer_payload  # noqa: E402
+from ui.upload import ingest_upload  # noqa: E402
+
+
+def upload_signature(file_name: str, content: bytes) -> str:
+    digest = hashlib.sha1(content).hexdigest()[:12]
+    return f"{file_name}:{digest}"
 
 
 def main() -> None:
@@ -27,6 +32,8 @@ def main() -> None:
         st.session_state.service = NotebookService(AppConfig())
     if "last_record" not in st.session_state:
         st.session_state.last_record = None
+    if "last_upload_signature" not in st.session_state:
+        st.session_state.last_upload_signature = None
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -67,8 +74,26 @@ def main() -> None:
         st.subheader("Upload")
         uploaded = st.file_uploader("PDF ou DOCX", type=["pdf", "docx"])
         if uploaded and st.button("Indexar documento"):
-            record = ingest_upload(service, uploaded.name, uploaded.getvalue())
+            uploaded_content = uploaded.getvalue()
+            signature = upload_signature(uploaded.name, uploaded_content)
+            progress_text = st.empty()
+            progress_bar = st.progress(0)
+
+            def _on_progress(value: float, message: str) -> None:
+                bounded = max(0.0, min(1.0, float(value)))
+                progress_bar.progress(int(bounded * 100))
+                progress_text.info(message)
+
+            record = ingest_upload(
+                service,
+                uploaded.name,
+                uploaded_content,
+                progress_callback=_on_progress,
+            )
+            progress_bar.empty()
+            progress_text.empty()
             st.session_state.last_record = record
+            st.session_state.last_upload_signature = signature
             st.success(f"Documento indexado: {record.file_name}")
 
     only_last = st.checkbox("Filtrar pelo ultimo documento enviado", value=True)
@@ -83,6 +108,15 @@ def main() -> None:
 
     question = st.chat_input("Pergunte sobre os documentos")
     if question:
+        if uploaded:
+            uploaded_content = uploaded.getvalue()
+            signature = upload_signature(uploaded.name, uploaded_content)
+            if st.session_state.last_upload_signature != signature:
+                with st.spinner("Indexando documento selecionado antes de responder..."):
+                    record = ingest_upload(service, uploaded.name, uploaded_content)
+                st.session_state.last_record = record
+                st.session_state.last_upload_signature = signature
+
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.write(question)
