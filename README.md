@@ -23,6 +23,32 @@ MVP estilo NotebookLM com upload de PDF/DOCX, indexacao RAG, perguntas sobre doc
 - `src/ui`: modulos de upload, chat, citacoes e visualizacao.
 - `tests/`: testes unitarios e de fluxo deterministico.
 
+## Tecnologias Usadas
+
+- Python 3.11: linguagem principal do projeto.
+- Streamlit: interface web para upload, chat e visualizacao das citacoes.
+- ChromaDB: banco vetorial persistente usado para armazenar e buscar chunks por embeddings.
+- OpenAI SDK: cliente para chamadas de embeddings e LLM quando `OPENAI_API_KEY` esta configurada.
+- PyMuPDF (`fitz`): extracao de texto de arquivos PDF por pagina.
+- python-docx: extracao de texto de arquivos DOCX por paragrafo.
+- SQLite: persistencia local de documentos indexados, historico de perguntas e citacoes.
+- python-dotenv: carregamento local das variaveis definidas em `.env`.
+- uv: gerenciamento de ambiente, dependencias e execucao de comandos do projeto.
+- pytest: suite de testes automatizados.
+- pytest-cov: medicao de cobertura com gate minimo de 95%.
+- Ruff: lint para manter qualidade e consistencia do codigo.
+- Black: formatador de codigo Python configurado no projeto.
+
+Componentes internos importantes:
+
+- `DocumentLoader`: converte PDF/DOCX em secoes com metadados.
+- `Chunker`: quebra secoes em chunks com linhas e sobreposicao.
+- `Retriever`: combina busca vetorial e busca lexical para encontrar contexto relevante.
+- `RagPipeline`: orquestra ingestao, recuperacao e geracao de respostas.
+- `AnswerGenerator`: chama o LLM e monta resposta com citacoes.
+- `CitationFormatter`: transforma metadados dos chunks em links rastreaveis.
+- `FakeEmbeddingModel` e `FakeLLM`: implementacoes deterministicas para testes e desenvolvimento sem rede.
+
 ## Instalacao
 
 Com `uv`:
