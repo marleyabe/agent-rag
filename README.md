@@ -82,6 +82,8 @@ Fluxo recomendado:
 
 A interface tambem tenta indexar automaticamente o arquivo selecionado antes de responder, caso ele ainda nao tenha sido indexado na sessao atual.
 
+Para apresentacao, tambem ha um botao `Usar cartilha de demonstracao` na barra lateral. Ele indexa a `cartilha_ppsi.pdf` versionada no repositorio e evita depender do upload do navegador.
+
 ## Configuracao de Modelos
 
 Configure `.env` com base em `.env.example` para usar OpenAI:
@@ -119,6 +121,7 @@ Observacoes importantes:
 - O app salva uploads, SQLite e ChromaDB em `storage/` dentro do container.
 - Esse armazenamento e suficiente para demonstracao, mas pode ser perdido em restart ou redeploy.
 - Se o ChromaDB persistente falhar no ambiente do Streamlit Cloud, o app usa um store vetorial em memoria para manter a demo funcionando.
+- Se o log mostrar `ClientDisconnect` durante upload, use o botao `Usar cartilha de demonstracao` ou tente reenviar o arquivo; esse erro vem da conexao de upload do Streamlit.
 - Nao suba `.env` para o repositorio; use secrets no Streamlit Cloud.
 - Para demo em sala, mantenha tambem o app local como plano B.
 
@@ -233,6 +236,7 @@ Documento recomendado para demonstracao:
 
 - `cartilha_ppsi.pdf`, uma cartilha oficial curta do Programa de Privacidade e Seguranca da Informacao.
 - Por ser pequena e ter texto extraivel, costuma indexar rapido e gerar respostas objetivas.
+- No Streamlit Cloud, prefira o botao `Usar cartilha de demonstracao` para evitar falhas de rede no upload.
 
 ## Limitações Conhecidas
 

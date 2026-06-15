@@ -45,6 +45,35 @@ def load_streamlit_secrets_into_env() -> None:
             os.environ[key] = str(value)
 
 
+def index_document(service: NotebookService, file_name: str, content: bytes) -> None:
+    signature = upload_signature(file_name, content)
+    progress_text = st.empty()
+    progress_bar = st.progress(0)
+
+    def _on_progress(value: float, message: str) -> None:
+        bounded = max(0.0, min(1.0, float(value)))
+        progress_bar.progress(int(bounded * 100))
+        progress_text.info(message)
+
+    try:
+        record = ingest_upload(
+            service,
+            file_name,
+            content,
+            progress_callback=_on_progress,
+        )
+    except Exception as exc:
+        progress_bar.empty()
+        progress_text.empty()
+        st.error(f"Nao foi possivel indexar o documento: {exc}")
+    else:
+        progress_bar.empty()
+        progress_text.empty()
+        st.session_state.last_record = record
+        st.session_state.last_upload_signature = signature
+        st.success(f"Documento indexado: {record.file_name}")
+
+
 def main() -> None:
     st.set_page_config(page_title="RAG Notebook MVP", layout="wide")
     st.title("RAG Notebook MVP")
@@ -97,32 +126,11 @@ def main() -> None:
         uploaded = st.file_uploader("PDF ou DOCX", type=["pdf", "docx"])
         if uploaded and st.button("Indexar documento"):
             uploaded_content = uploaded.getvalue()
-            signature = upload_signature(uploaded.name, uploaded_content)
-            progress_text = st.empty()
-            progress_bar = st.progress(0)
+            index_document(service, uploaded.name, uploaded_content)
 
-            def _on_progress(value: float, message: str) -> None:
-                bounded = max(0.0, min(1.0, float(value)))
-                progress_bar.progress(int(bounded * 100))
-                progress_text.info(message)
-
-            try:
-                record = ingest_upload(
-                    service,
-                    uploaded.name,
-                    uploaded_content,
-                    progress_callback=_on_progress,
-                )
-            except Exception as exc:
-                progress_bar.empty()
-                progress_text.empty()
-                st.error(f"Nao foi possivel indexar o documento: {exc}")
-            else:
-                progress_bar.empty()
-                progress_text.empty()
-                st.session_state.last_record = record
-                st.session_state.last_upload_signature = signature
-                st.success(f"Documento indexado: {record.file_name}")
+        demo_path = ROOT / "cartilha_ppsi.pdf"
+        if demo_path.exists() and st.button("Usar cartilha de demonstracao"):
+            index_document(service, demo_path.name, demo_path.read_bytes())
 
     only_last = st.checkbox("Filtrar pelo ultimo documento enviado", value=True)
     for message in st.session_state.messages:
