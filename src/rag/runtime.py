@@ -19,6 +19,7 @@ from rag.retriever import Retriever
 from storage.db import AppDatabase
 from storage.files import FileStorage
 from vectorstore.chroma_store import ChromaVectorStore
+from vectorstore.fake_store import FakeVectorStore
 
 
 def _collection_name_from_env() -> str:
@@ -30,6 +31,17 @@ def _collection_name_from_env() -> str:
     return f"chunks_{sanitized}"
 
 
+def _build_vector_store(config: AppConfig, embedding: OpenAIEmbeddingModel):
+    try:
+        return ChromaVectorStore(
+            str(config.chroma_dir),
+            embedding,
+            collection=_collection_name_from_env(),
+        )
+    except Exception:
+        return FakeVectorStore(embedding)
+
+
 class NotebookService:
     def __init__(self, config: AppConfig) -> None:
         load_dotenv()
@@ -37,11 +49,7 @@ class NotebookService:
         self.db = AppDatabase(config.db_path)
         self.files = FileStorage(config.files_dir)
         self.embedding = OpenAIEmbeddingModel()
-        self.vector_store = ChromaVectorStore(
-            str(config.chroma_dir),
-            self.embedding,
-            collection=_collection_name_from_env(),
-        )
+        self.vector_store = _build_vector_store(config, self.embedding)
         self.pipeline = RagPipeline(
             document_loader=DocumentLoader(),
             chunker=Chunker(),

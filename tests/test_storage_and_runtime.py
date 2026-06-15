@@ -4,9 +4,11 @@ from pathlib import Path
 
 from config import AppConfig
 from models import Answer, Citation, DocumentRecord
-from rag.runtime import NotebookService, _collection_name_from_env
+from rag.embedding_core import OpenAIEmbeddingModel
+from rag.runtime import NotebookService, _build_vector_store, _collection_name_from_env
 from storage.db import AppDatabase
 from storage.files import FileStorage
+from vectorstore.fake_store import FakeVectorStore
 
 
 def test_file_storage_save_upload(tmp_path: Path) -> None:
@@ -104,3 +106,23 @@ def test_runtime_collection_name_from_env(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "x")
     monkeypatch.setenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     assert _collection_name_from_env() == "chunks_text_embedding_3_small"
+
+
+def test_runtime_falls_back_to_memory_store_when_chroma_fails(tmp_path: Path, monkeypatch) -> None:
+    class BrokenChroma:
+        def __init__(self, *_: object, **__: object) -> None:
+            raise KeyError("chroma client failed")
+
+    monkeypatch.setattr("rag.runtime.ChromaVectorStore", BrokenChroma)
+    store = _build_vector_store(
+        AppConfig(
+            root_dir=tmp_path,
+            storage_dir=tmp_path / "storage",
+            files_dir=tmp_path / "storage" / "files",
+            chroma_dir=tmp_path / "storage" / "chroma",
+            db_path=tmp_path / "storage" / "app.db",
+        ),
+        OpenAIEmbeddingModel(),
+    )
+
+    assert isinstance(store, FakeVectorStore)
