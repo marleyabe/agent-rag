@@ -2,6 +2,11 @@
 
 MVP estilo NotebookLM com upload de PDF/DOCX, indexacao RAG, perguntas sobre documentos e respostas com citacoes rastreaveis.
 
+## Integrantes
+
+- Marley Abe Silva
+- Maycon Moriy Abe Machado
+
 ## Funcionalidades
 
 - Upload de PDF ou DOCX pela interface Streamlit.
