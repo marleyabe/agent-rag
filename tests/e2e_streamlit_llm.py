@@ -46,7 +46,8 @@ def main() -> int:
         expect(page.get_by_text("RAG Notebook MVP")).to_be_visible()
         assert_no_visible_app_error(page)
 
-        page.get_by_role("button", name="Usar cartilha de demonstracao").click()
+        page.locator("input[type='file']").set_input_files(str(PDF_PATH))
+        page.get_by_role("button", name="Indexar documento").click()
         expect(page.get_by_text(re.compile(r"Documento indexado:.*cartilha_ppsi", re.I))).to_be_visible()
         assert_no_visible_app_error(page)
 

@@ -128,10 +128,6 @@ def main() -> None:
             uploaded_content = uploaded.getvalue()
             index_document(service, uploaded.name, uploaded_content)
 
-        demo_path = ROOT / "cartilha_ppsi.pdf"
-        if demo_path.exists() and st.button("Usar cartilha de demonstracao"):
-            index_document(service, demo_path.name, demo_path.read_bytes())
-
     only_last = st.checkbox("Filtrar pelo ultimo documento enviado", value=True)
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
