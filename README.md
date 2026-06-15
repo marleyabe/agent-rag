@@ -10,6 +10,8 @@ MVP estilo NotebookLM com upload de PDF/DOCX, indexacao RAG, perguntas sobre doc
 - Perguntas genericas de visao geral, como resumo e assunto principal.
 - Filtro opcional pelo ultimo documento enviado.
 - Citacoes clicaveis que apontam para o trecho usado na resposta.
+- Leitura de secrets do Streamlit Cloud para configuracao de modelos em deploy.
+- Tratamento de erros de upload, indexacao e resposta direto na interface.
 - Fallback extrativo local quando o LLM externo nao retorna evidencia, mas o retriever encontrou contexto relevante.
 
 ## Arquitetura
@@ -22,6 +24,7 @@ MVP estilo NotebookLM com upload de PDF/DOCX, indexacao RAG, perguntas sobre doc
 - `src/citations`: formatacao de citacoes e links internos.
 - `src/ui`: modulos de upload, chat, citacoes e visualizacao.
 - `tests/`: testes unitarios e de fluxo deterministico.
+- `cartilha_ppsi.pdf`: documento curto sugerido para demonstracao do prototipo.
 
 ## Tecnologias Usadas
 
@@ -33,6 +36,7 @@ MVP estilo NotebookLM com upload de PDF/DOCX, indexacao RAG, perguntas sobre doc
 - python-docx: extracao de texto de arquivos DOCX por paragrafo.
 - SQLite: persistencia local de documentos indexados, historico de perguntas e citacoes.
 - python-dotenv: carregamento local das variaveis definidas em `.env`.
+- Playwright: validacao end-to-end manual do fluxo no navegador.
 - uv: gerenciamento de ambiente, dependencias e execucao de comandos do projeto.
 - pytest: suite de testes automatizados.
 - pytest-cov: medicao de cobertura com gate minimo de 95%.
@@ -85,6 +89,33 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 Sem `OPENAI_API_KEY`, o projeto usa modelos fake deterministico para desenvolvimento e testes locais.
 
+No Streamlit Cloud, configure os mesmos valores em `Settings > Secrets`:
+
+```toml
+OPENAI_API_KEY = "..."
+OPENAI_MODEL = "gpt-4.1-mini"
+OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+```
+
+O app tambem aceita `OPENAI_EMBEDDING_BATCH_SIZE` e `RAG_MIN_RETRIEVAL_SCORE` como variaveis opcionais.
+
+## Deploy no Streamlit Cloud
+
+Configuracao recomendada para apresentacao:
+
+1. Selecione o repositorio no Streamlit Community Cloud.
+2. Use `app.py` como arquivo principal.
+3. Configure Python 3.11.
+4. Adicione os secrets da OpenAI no painel do Streamlit.
+5. Faca o upload de um PDF/DOCX pela interface do app.
+
+Observacoes importantes:
+
+- O app salva uploads, SQLite e ChromaDB em `storage/` dentro do container.
+- Esse armazenamento e suficiente para demonstracao, mas pode ser perdido em restart ou redeploy.
+- Nao suba `.env` para o repositorio; use secrets no Streamlit Cloud.
+- Para demo em sala, mantenha tambem o app local como plano B.
+
 ## Pipeline RAG
 
 1. Upload do arquivo.
@@ -101,6 +132,8 @@ Sem `OPENAI_API_KEY`, o projeto usa modelos fake deterministico para desenvolvim
 9. Geracao da resposta.
 10. Formatacao de citacoes.
 
+Quando a OpenAI esta configurada, o gerador primeiro tenta extrair fatos objetivos do contexto recuperado e depois monta a resposta citada. Se a etapa de extracao for conservadora demais, o modelo ainda recebe o contexto recuperado antes de o sistema cair no fallback local.
+
 ## Perguntas Genericas
 
 O pipeline trata perguntas de visao geral por uma rota especifica, porque elas nao apontam para um trecho unico do documento. Exemplos:
@@ -116,13 +149,14 @@ Para esse tipo de pergunta, o pipeline prioriza capa, primeiras paginas, sumario
 
 ## Perguntas Factuais
 
-Perguntas factuais usam recuperacao hibrida nos chunks indexados. Exemplos para uma Constituicao:
+Perguntas factuais usam recuperacao hibrida nos chunks indexados. Exemplos para a `cartilha_ppsi.pdf`:
 
-- `Quais sao os direitos fundamentais?`
-- `O que diz o artigo 5o?`
-- `Quais sao os direitos sociais?`
-- `Quais sao os principios fundamentais?`
-- `Como a Constituicao organiza os poderes?`
+- `Qual e o objetivo do PPSI?`
+- `Quais sao as areas de atuacao do PPSI?`
+- `O que faz a area de tecnologia?`
+- `Qual e a missao do CISC Gov.br?`
+- `Quais sao os objetivos do Centro de Excelencia?`
+- `Quais sao as etapas para implementacao do Framework?`
 
 ## Citacoes
 
@@ -160,17 +194,39 @@ uv run pytest --no-cov
 
 O `pytest` padrao inclui gate de cobertura minima de 95%.
 
-Tambem ha cobertura do fluxo de UI com o test harness do Streamlit, incluindo upload, indexacao do `CF.pdf` e pergunta pelo chat.
+Tambem ha cobertura do fluxo de UI com o test harness do Streamlit.
+
+Validacao end-to-end manual usada neste projeto:
+
+```bash
+uv run streamlit run app.py --server.headless true --server.port 8504
+uv run --with playwright python tests/e2e_streamlit_llm.py
+```
+
+O roteiro Playwright valida:
+
+- abertura do app;
+- upload e indexacao da `cartilha_ppsi.pdf`;
+- pergunta no chat;
+- resposta com LLM real quando `OPENAI_API_KEY` esta configurada;
+- renderizacao de citacoes;
+- abertura da visualizacao da citacao.
 
 ## Validacao Manual Sugerida
 
 Depois de iniciar o app:
 
-1. Selecione `CF.pdf`.
+1. Selecione `cartilha_ppsi.pdf`.
 2. Clique em `Indexar documento`.
-3. Pergunte `Quais sao os direitos fundamentais?`.
+3. Pergunte `Qual e o objetivo do PPSI?`.
 4. Confirme que a resposta nao e `Nao encontrei essa informacao nos documentos enviados.`.
 5. Confirme que existem citacoes abaixo da resposta.
+6. Clique em uma citacao e confirme que a tela mostra arquivo, pagina, linhas e trecho citado.
+
+Documento recomendado para demonstracao:
+
+- `cartilha_ppsi.pdf`, uma cartilha oficial curta do Programa de Privacidade e Seguranca da Informacao.
+- Por ser pequena e ter texto extraivel, costuma indexar rapido e gerar respostas objetivas.
 
 ## Limitações Conhecidas
 

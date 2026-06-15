@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 import sys
 
@@ -18,15 +19,36 @@ from ui.citations import citation_title, citation_viewer_link  # noqa: E402
 from ui.document_viewer import build_pdf_open_url, get_viewer_payload  # noqa: E402
 from ui.upload import ingest_upload  # noqa: E402
 
+SECRET_ENV_KEYS = (
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OPENAI_EMBEDDING_MODEL",
+    "OPENAI_EMBEDDING_BATCH_SIZE",
+    "RAG_MIN_RETRIEVAL_SCORE",
+)
+
 
 def upload_signature(file_name: str, content: bytes) -> str:
     digest = hashlib.sha1(content).hexdigest()[:12]
     return f"{file_name}:{digest}"
 
 
+def load_streamlit_secrets_into_env() -> None:
+    for key in SECRET_ENV_KEYS:
+        if os.getenv(key):
+            continue
+        try:
+            value = st.secrets.get(key)
+        except Exception:
+            value = None
+        if value is not None:
+            os.environ[key] = str(value)
+
+
 def main() -> None:
     st.set_page_config(page_title="RAG Notebook MVP", layout="wide")
     st.title("RAG Notebook MVP")
+    load_streamlit_secrets_into_env()
 
     if "service" not in st.session_state:
         st.session_state.service = NotebookService(AppConfig())
@@ -84,17 +106,23 @@ def main() -> None:
                 progress_bar.progress(int(bounded * 100))
                 progress_text.info(message)
 
-            record = ingest_upload(
-                service,
-                uploaded.name,
-                uploaded_content,
-                progress_callback=_on_progress,
-            )
-            progress_bar.empty()
-            progress_text.empty()
-            st.session_state.last_record = record
-            st.session_state.last_upload_signature = signature
-            st.success(f"Documento indexado: {record.file_name}")
+            try:
+                record = ingest_upload(
+                    service,
+                    uploaded.name,
+                    uploaded_content,
+                    progress_callback=_on_progress,
+                )
+            except Exception as exc:
+                progress_bar.empty()
+                progress_text.empty()
+                st.error(f"Nao foi possivel indexar o documento: {exc}")
+            else:
+                progress_bar.empty()
+                progress_text.empty()
+                st.session_state.last_record = record
+                st.session_state.last_upload_signature = signature
+                st.success(f"Documento indexado: {record.file_name}")
 
     only_last = st.checkbox("Filtrar pelo ultimo documento enviado", value=True)
     for message in st.session_state.messages:
@@ -112,17 +140,26 @@ def main() -> None:
             uploaded_content = uploaded.getvalue()
             signature = upload_signature(uploaded.name, uploaded_content)
             if st.session_state.last_upload_signature != signature:
-                with st.spinner("Indexando documento selecionado antes de responder..."):
-                    record = ingest_upload(service, uploaded.name, uploaded_content)
-                st.session_state.last_record = record
-                st.session_state.last_upload_signature = signature
+                try:
+                    with st.spinner("Indexando documento selecionado antes de responder..."):
+                        record = ingest_upload(service, uploaded.name, uploaded_content)
+                except Exception as exc:
+                    st.error(f"Nao foi possivel indexar o documento: {exc}")
+                    return
+                else:
+                    st.session_state.last_record = record
+                    st.session_state.last_upload_signature = signature
 
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.write(question)
 
         file_id = resolve_filter_file_id(only_last, st.session_state.last_record)
-        answer = ask_question(service, question, file_id=file_id)
+        try:
+            answer = ask_question(service, question, file_id=file_id)
+        except Exception as exc:
+            st.error(f"Nao foi possivel responder agora: {exc}")
+            return
         rendered_citations = []
         with st.chat_message("assistant"):
             st.write(answer.answer)

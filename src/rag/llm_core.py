@@ -47,14 +47,16 @@ class OpenAILLM(LLM):
         except Exception:
             return self._fallback.generate(question, chunks)
         facts = (extraction.choices[0].message.content or "").strip()
-        if not facts or "SEM_EVIDENCIA" in facts:
-            return self._fallback.generate(question, chunks)
+        if facts and "SEM_EVIDENCIA" not in facts:
+            evidence_block = f"Fatos extraidos:\n{facts}"
+        else:
+            evidence_block = f"Contexto recuperado:\n{context}"
 
         answer_prompt = (
-            "Com base apenas nos fatos extraidos abaixo, responda em portugues de forma objetiva. "
+            "Com base apenas nas evidencias abaixo, responda em portugues de forma objetiva. "
             "Toda afirmacao deve conter citacao [C#]. Se os fatos nao bastarem, responda "
             "'Nao encontrei essa informacao nos documentos enviados.'\n\n"
-            f"Pergunta: {question}\n\nFatos extraidos:\n{facts}"
+            f"Pergunta: {question}\n\n{evidence_block}"
         )
         try:
             answer = self._client.chat.completions.create(
@@ -69,4 +71,7 @@ class OpenAILLM(LLM):
             )
         except Exception:
             return self._fallback.generate(question, chunks)
-        return (answer.choices[0].message.content or "").strip()
+        answer_text = (answer.choices[0].message.content or "").strip()
+        if not answer_text or "SEM_EVIDENCIA" in answer_text:
+            return self._fallback.generate(question, chunks)
+        return answer_text

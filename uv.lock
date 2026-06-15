@@ -17,6 +17,7 @@ dependencies = [
     { name = "openai" },
     { name = "pymupdf" },
     { name = "python-docx" },
+    { name = "python-dotenv" },
     { name = "streamlit" },
 ]
 
@@ -35,6 +36,7 @@ requires-dist = [
     { name = "openai", specifier = ">=2.36.0" },
     { name = "pymupdf", specifier = "==1.25.3" },
     { name = "python-docx", specifier = "==1.1.2" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "streamlit", specifier = ">=1.45.1" },
 ]
 
