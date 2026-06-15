@@ -93,10 +93,7 @@ def test_llama_llm_fallback_and_mocked_client(monkeypatch) -> None:
             self.calls += 1
             assert model == "gpt-4.1-mini"
             assert "Pergunta:" in messages[1]["content"]
-            if self.calls == 1:
-                content = "Fato 1 [C1]"
-            else:
-                content = "Resposta final [C1]"
+            content = "Resposta final [C1]"
             return types.SimpleNamespace(
                 choices=[types.SimpleNamespace(message=types.SimpleNamespace(content=content))]
             )
@@ -113,6 +110,7 @@ def test_llama_llm_fallback_and_mocked_client(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeClient))
     llm2 = OpenAILLM()
     assert llm2.generate("q", [chunk]) == "Resposta final [C1]"
+    assert llm2._client.chat.completions.calls == 1  # type: ignore[union-attr]
 
 
 def test_openai_llm_uses_extractive_fallback_when_model_reports_no_evidence(monkeypatch) -> None:

@@ -84,3 +84,34 @@ def test_retriever_merges_lexical_matches_outside_vector_top_k() -> None:
     )
 
     assert [chunk.chunk_id for chunk in chunks] == ["c2"]
+
+
+def test_retriever_full_lexical_scan_is_opt_in() -> None:
+    class CountingStore(FakeVectorStore):
+        def __init__(self, embedding_model: FakeEmbeddingModel) -> None:
+            super().__init__(embedding_model)
+            self.fetch_calls = 0
+
+        def fetch(self, filters: dict | None = None, limit: int | None = None) -> list[Chunk]:
+            self.fetch_calls += 1
+            return super().fetch(filters=filters, limit=limit)
+
+    emb = FakeEmbeddingModel()
+    store = CountingStore(embedding_model=emb)
+    store.add(
+        [
+            Chunk(
+                chunk_id="c1",
+                text="A multa por atraso e de 2%",
+                metadata={"file_id": "doc1", "chunk_id": "c1"},
+            )
+        ]
+    )
+
+    Retriever(embedding_model=emb, vector_store=store).retrieve("qual a multa", top_k=1)
+    assert store.fetch_calls == 0
+
+    Retriever(embedding_model=emb, vector_store=store, full_lexical_scan=True).retrieve(
+        "qual a multa", top_k=1
+    )
+    assert store.fetch_calls == 1

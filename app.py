@@ -25,6 +25,8 @@ SECRET_ENV_KEYS = (
     "OPENAI_EMBEDDING_MODEL",
     "OPENAI_EMBEDDING_BATCH_SIZE",
     "RAG_MIN_RETRIEVAL_SCORE",
+    "RAG_RETRIEVER_CANDIDATE_K",
+    "RAG_FULL_LEXICAL_SCAN",
 )
 
 
@@ -127,6 +129,8 @@ def main() -> None:
         if uploaded and st.button("Indexar documento"):
             uploaded_content = uploaded.getvalue()
             index_document(service, uploaded.name, uploaded_content)
+        st.divider()
+        st.caption("Trabalho por Marley Abe Silva e Maycon Moriy Abe Machado")
 
     only_last = st.checkbox("Filtrar pelo ultimo documento enviado", value=True)
     for message in st.session_state.messages:

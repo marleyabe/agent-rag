@@ -102,7 +102,12 @@ OPENAI_MODEL = "gpt-4.1-mini"
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 ```
 
-O app tambem aceita `OPENAI_EMBEDDING_BATCH_SIZE` e `RAG_MIN_RETRIEVAL_SCORE` como variaveis opcionais.
+O app tambem aceita estas variaveis opcionais:
+
+- `OPENAI_EMBEDDING_BATCH_SIZE`: tamanho dos lotes de embeddings na indexacao.
+- `RAG_MIN_RETRIEVAL_SCORE`: score minimo para aceitar contexto recuperado.
+- `RAG_RETRIEVER_CANDIDATE_K`: quantidade de candidatos vetoriais usados no rerank hibrido. O padrao e `40`.
+- `RAG_FULL_LEXICAL_SCAN`: use `1` para varrer lexicalmente todos os chunks filtrados. Aumenta recall, mas pode deixar a primeira pergunta mais lenta em documentos grandes.
 
 ## Deploy no Streamlit Cloud
 
@@ -132,14 +137,16 @@ Observacoes importantes:
 5. Geracao de embeddings.
 6. Upsert no ChromaDB.
 7. Recuperacao hibrida:
-   - busca vetorial;
-   - varredura lexical dos chunks do documento filtrado;
+   - busca vetorial com candidatos extras;
+   - rerank lexical dos candidatos recuperados;
    - rerank por score hibrido.
 8. Selecao de contexto.
 9. Geracao da resposta.
 10. Formatacao de citacoes.
 
-Quando a OpenAI esta configurada, o gerador primeiro tenta extrair fatos objetivos do contexto recuperado e depois monta a resposta citada. Se a etapa de extracao for conservadora demais, o modelo ainda recebe o contexto recuperado antes de o sistema cair no fallback local.
+Por padrao, a recuperacao nao carrega todos os chunks do documento em cada pergunta. Isso reduz a latencia da primeira resposta depois da indexacao. Para documentos em que uma pergunta dependa muito de correspondencia literal e fique fora dos candidatos vetoriais, defina `RAG_FULL_LEXICAL_SCAN=1` para reativar a varredura lexical completa.
+
+Quando a OpenAI esta configurada, o gerador monta a resposta citada em uma unica chamada ao modelo. Se o modelo indicar falta de evidencia, o sistema usa fallback extrativo local quando ha contexto recuperado.
 
 ## Perguntas Genericas
 

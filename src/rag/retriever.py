@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 
@@ -35,17 +36,33 @@ class Retriever:
         "sobre",
     }
 
-    def __init__(self, embedding_model: EmbeddingModel, vector_store: FakeVectorStore) -> None:
+    def __init__(
+        self,
+        embedding_model: EmbeddingModel,
+        vector_store: FakeVectorStore,
+        *,
+        full_lexical_scan: bool | None = None,
+    ) -> None:
         self.embedding_model = embedding_model
         self.vector_store = vector_store
+        self._candidate_k = int(os.getenv("RAG_RETRIEVER_CANDIDATE_K", "40"))
+        if full_lexical_scan is None:
+            full_lexical_scan = os.getenv("RAG_FULL_LEXICAL_SCAN", "").lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+        self._full_lexical_scan = full_lexical_scan
 
     def retrieve(self, question: str, top_k: int, filters: dict | None = None) -> list[Chunk]:
         query_embedding = self.embedding_model.embed(question)
+        candidate_k = max(top_k, self._candidate_k)
         candidates = self.vector_store.search(
-            query_embedding=query_embedding, top_k=top_k, filters=filters
+            query_embedding=query_embedding, top_k=candidate_k, filters=filters
         )
         fetch = getattr(self.vector_store, "fetch", None)
-        if fetch:
+        if fetch and self._full_lexical_scan:
             candidates = self._merge_candidates(candidates, fetch(filters=filters))
         scored: list[Chunk] = []
         for chunk in candidates:

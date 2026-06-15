@@ -25,38 +25,12 @@ class OpenAILLM(LLM):
         context = "\n\n".join(
             [f"[C{idx + 1}] {chunk.text}" for idx, chunk in enumerate(chunks[:8])]
         )
-        extraction_prompt = (
-            "Extraia fatos objetivos SOMENTE do contexto. "
-            "Cada linha deve terminar com pelo menos uma citacao [C#]. "
-            "Se nao houver fatos suficientes, retorne exatamente: SEM_EVIDENCIA.\n\n"
-            f"Pergunta: {question}\n\nContexto:\n{context}"
-        )
-        try:
-            extraction = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Voce extrai evidencias literais de trechos recuperados para RAG."
-                        ),
-                    },
-                    {"role": "user", "content": extraction_prompt},
-                ],
-            )
-        except Exception:
-            return self._fallback.generate(question, chunks)
-        facts = (extraction.choices[0].message.content or "").strip()
-        if facts and "SEM_EVIDENCIA" not in facts:
-            evidence_block = f"Fatos extraidos:\n{facts}"
-        else:
-            evidence_block = f"Contexto recuperado:\n{context}"
-
         answer_prompt = (
-            "Com base apenas nas evidencias abaixo, responda em portugues de forma objetiva. "
-            "Toda afirmacao deve conter citacao [C#]. Se os fatos nao bastarem, responda "
-            "'Nao encontrei essa informacao nos documentos enviados.'\n\n"
-            f"Pergunta: {question}\n\n{evidence_block}"
+            "Responda em portugues de forma objetiva usando SOMENTE o contexto abaixo. "
+            "Toda afirmacao factual deve conter uma citacao [C#]. "
+            "Se o contexto nao tiver fatos suficientes para responder, retorne exatamente: "
+            "SEM_EVIDENCIA.\n\n"
+            f"Pergunta: {question}\n\nContexto:\n{context}"
         )
         try:
             answer = self._client.chat.completions.create(
@@ -64,7 +38,9 @@ class OpenAILLM(LLM):
                 messages=[
                     {
                         "role": "system",
-                        "content": "Voce gera respostas RAG estritamente fundamentadas em evidencias.",
+                        "content": (
+                            "Voce gera respostas RAG estritamente fundamentadas em evidencias."
+                        ),
                     },
                     {"role": "user", "content": answer_prompt},
                 ],
